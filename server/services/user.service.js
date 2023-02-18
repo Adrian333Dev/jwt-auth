@@ -12,7 +12,8 @@ const ApiError = require('../exceptions/api-error.exception');
 class UserService {
 	async registration(email, password) {
 		const candidate = await UserModel.findOne({ email });
-		if (candidate) throw new ApiError.BadRequest(`User with email ${email} already exists`);
+		if (candidate)
+			throw new ApiError.BadRequest(`User with email ${email} already exists`);
 
 		const hashPassword = await bcrypt.hash(password, 3);
 		const activationLink = uuid.v4();
@@ -35,11 +36,27 @@ class UserService {
 		return { user: userDto, accessToken, refreshToken };
 	}
 
-	async activate(activationLink) { 
+	async activate(activationLink) {
 		const user = UserModel.findOne({ activationLink });
 		if (!user) throw new ApiError.BadRequest('Incorrect activation link');
 		user.isActivated = true;
 		await user.save();
+	}
+
+	async login(email, password) {
+		const user = await UserModel.findOne({ email });
+		if (!user)
+			throw new ApiError.BadRequest(`User with email ${email} not found`);
+
+		const isPassEquals = await bcrypt.compare(password, user.password);
+		if (!isPassEquals) throw new ApiError.BadRequest('Incorrect password');
+
+		const userDto = new UserDto(user);
+		const { accessToken, refreshToken } = tokenService.generateTokens({
+			...userDto,
+		});
+		await tokenService.saveToken(userDto.id, refreshToken);
+		return { user: userDto, accessToken, refreshToken };
 	}
 }
 
